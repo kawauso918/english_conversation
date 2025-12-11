@@ -109,7 +109,13 @@ st.divider()
 for message in st.session_state.messages:
     if message["role"] == "assistant":
         with st.chat_message(message["role"], avatar="images/ai_icon.jpg"):
-            st.markdown(message["content"])
+            # 英語と日本語訳を分離して表示
+            content_english, content_japanese = ft.split_english_and_japanese(message["content"])
+            # 英語部分を表示
+            st.markdown(content_english if content_english else message["content"])
+            # 日本語訳がある場合は表示
+            if content_japanese:
+                st.markdown(f"<div style='color: #666; font-size: 0.9em; margin-top: 0.5em;'>{content_japanese}</div>", unsafe_allow_html=True)
     elif message["role"] == "user":
         with st.chat_message(message["role"], avatar="images/user_icon.jpg"):
             st.markdown(message["content"])
@@ -156,16 +162,28 @@ if st.session_state.start_flg:
             
             # AIメッセージとユーザーメッセージの画面表示
             with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-                st.markdown(st.session_state.problem)
+                # 問題文から英語と日本語訳を分離
+                problem_english, problem_japanese = ft.split_english_and_japanese(st.session_state.problem)
+                # 英語部分を表示
+                st.markdown(problem_english if problem_english else st.session_state.problem)
+                # 日本語訳がある場合は表示
+                if problem_japanese:
+                    st.markdown(f"<div style='color: #666; font-size: 0.9em; margin-top: 0.5em;'>{problem_japanese}</div>", unsafe_allow_html=True)
             with st.chat_message("user", avatar=ct.USER_ICON_PATH):
                 st.markdown(st.session_state.dictation_chat_message)
 
             # LLMが生成した問題文とチャット入力値をメッセージリストに追加
-            st.session_state.messages.append({"role": "assistant", "content": st.session_state.problem})
+            # 問題文を英語と日本語訳を含む形式で保存
+            problem_english, problem_japanese = ft.split_english_and_japanese(st.session_state.problem)
+            problem_display = problem_english if problem_english else st.session_state.problem
+            if problem_japanese:
+                problem_display += f"\n\n{problem_japanese}"
+            st.session_state.messages.append({"role": "assistant", "content": problem_display})
             st.session_state.messages.append({"role": "user", "content": st.session_state.dictation_chat_message})
             
             with st.spinner('評価結果の生成中...'):
                 system_template = ct.SYSTEM_TEMPLATE_EVALUATION.format(
+                    english_level=st.session_state.englv,
                     llm_text=st.session_state.problem,
                     user_text=st.session_state.dictation_chat_message
                 )
@@ -205,13 +223,19 @@ if st.session_state.start_flg:
 
         with st.spinner("回答の音声読み上げ準備中..."):
             # ユーザー入力値をLLMに渡して回答取得
-            llm_response = st.session_state.chain_basic_conversation.predict(input=audio_input_text)
+            llm_response_full = st.session_state.chain_basic_conversation.predict(input=audio_input_text)
             
-            # LLMからの回答を音声データに変換
+            # 英語部分と日本語訳部分を分離
+            llm_response_english, llm_response_japanese = ft.split_english_and_japanese(llm_response_full)
+            
+            # 音声読み上げ用には英語部分のみを使用
+            llm_response_for_audio = llm_response_english if llm_response_english else llm_response_full
+            
+            # LLMからの回答を音声データに変換（英語部分のみ）
             llm_response_audio = st.session_state.openai_obj.audio.speech.create(
                 model="tts-1",
                 voice="alloy",
-                input=llm_response
+                input=llm_response_for_audio
             )
 
             # 一旦mp3形式で音声ファイル作成後、wav形式に変換
@@ -223,11 +247,19 @@ if st.session_state.start_flg:
 
         # AIメッセージの画面表示とリストへの追加
         with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-            st.markdown(llm_response)
+            # 英語部分を表示
+            st.markdown(llm_response_english if llm_response_english else llm_response_full)
+            # 日本語訳がある場合は表示
+            if llm_response_japanese:
+                st.markdown(f"<div style='color: #666; font-size: 0.9em; margin-top: 0.5em;'>{llm_response_japanese}</div>", unsafe_allow_html=True)
 
         # ユーザー入力値とLLMからの回答をメッセージ一覧に追加
         st.session_state.messages.append({"role": "user", "content": audio_input_text})
-        st.session_state.messages.append({"role": "assistant", "content": llm_response})
+        # 表示用のフォーマット（英語と日本語訳を含む）
+        display_content = llm_response_english if llm_response_english else llm_response_full
+        if llm_response_japanese:
+            display_content += f"\n\n{llm_response_japanese}"
+        st.session_state.messages.append({"role": "assistant", "content": display_content})
 
 
     # モード：「シャドーイング」
@@ -254,17 +286,29 @@ if st.session_state.start_flg:
 
         # AIメッセージとユーザーメッセージの画面表示
         with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-            st.markdown(st.session_state.problem)
+            # 問題文から英語と日本語訳を分離
+            problem_english, problem_japanese = ft.split_english_and_japanese(st.session_state.problem)
+            # 英語部分を表示
+            st.markdown(problem_english if problem_english else st.session_state.problem)
+            # 日本語訳がある場合は表示
+            if problem_japanese:
+                st.markdown(f"<div style='color: #666; font-size: 0.9em; margin-top: 0.5em;'>{problem_japanese}</div>", unsafe_allow_html=True)
         with st.chat_message("user", avatar=ct.USER_ICON_PATH):
             st.markdown(audio_input_text)
         
         # LLMが生成した問題文と音声入力値をメッセージリストに追加
-        st.session_state.messages.append({"role": "assistant", "content": st.session_state.problem})
+        # 問題文を英語と日本語訳を含む形式で保存
+        problem_english, problem_japanese = ft.split_english_and_japanese(st.session_state.problem)
+        problem_display = problem_english if problem_english else st.session_state.problem
+        if problem_japanese:
+            problem_display += f"\n\n{problem_japanese}"
+        st.session_state.messages.append({"role": "assistant", "content": problem_display})
         st.session_state.messages.append({"role": "user", "content": audio_input_text})
 
         with st.spinner('評価結果の生成中...'):
             if st.session_state.shadowing_evaluation_first_flg:
                 system_template = ct.SYSTEM_TEMPLATE_EVALUATION.format(
+                    english_level=st.session_state.englv,
                     llm_text=st.session_state.problem,
                     user_text=audio_input_text
                 )

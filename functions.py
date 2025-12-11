@@ -148,13 +148,19 @@ def create_problem_and_play_audio():
     """
 
     # 問題文を生成するChainを実行し、問題文を取得
-    problem = st.session_state.chain_create_problem.predict(input="")
+    problem_full = st.session_state.chain_create_problem.predict(input="")
+    
+    # 英語部分と日本語訳部分を分離
+    problem_english, problem_japanese = split_english_and_japanese(problem_full)
+    
+    # 音声読み上げ用には英語部分のみを使用
+    problem_for_audio = problem_english if problem_english else problem_full
 
-    # LLMからの回答を音声データに変換
+    # LLMからの回答を音声データに変換（英語部分のみ）
     llm_response_audio = st.session_state.openai_obj.audio.speech.create(
         model="tts-1",
         voice="alloy",
-        input=problem
+        input=problem_for_audio
     )
 
     # 音声ファイルの作成
@@ -164,7 +170,7 @@ def create_problem_and_play_audio():
     # 音声ファイルの読み上げ
     play_wav(audio_output_file_path, st.session_state.speed)
 
-    return problem, llm_response_audio
+    return problem_full, llm_response_audio
 
 def create_evaluation():
     """
@@ -174,3 +180,29 @@ def create_evaluation():
     llm_response_evaluation = st.session_state.chain_evaluation.predict(input="")
 
     return llm_response_evaluation
+
+def split_english_and_japanese(text):
+    """
+    英語と日本語訳を分離する関数
+    Args:
+        text: LLMからの応答テキスト（英語と日本語訳が含まれる）
+    Returns:
+        english_text: 英語部分
+        japanese_text: 日本語訳部分（存在しない場合はNone）
+    """
+    # 「（」で始まる行を探して日本語訳を抽出
+    lines = text.split('\n')
+    english_lines = []
+    japanese_text = None
+    
+    for line in lines:
+        line = line.strip()
+        # 日本語訳の行を検出（「（」で始まる行）
+        if line.startswith('（') and line.endswith('）'):
+            japanese_text = line
+        elif not line.startswith('（') and line:  # 日本語訳以外の行
+            english_lines.append(line)
+    
+    english_text = '\n'.join(english_lines).strip()
+    
+    return english_text, japanese_text
